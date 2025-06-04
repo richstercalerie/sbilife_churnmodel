@@ -178,8 +178,5 @@ Invoke-RestMethod `
 
 ## 👨‍💻 Maintainers
 
-For questions or support, feel free to open an issue or reach out via GitHub Discussions.
+For questions or support, feel free to open an issue on anurag17sw@gmail.com
 
----
-
-Let me know if you'd like a `README.md` file generated directly or help creating badges, demo GIFs, or deploy buttons.

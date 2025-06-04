@@ -1,221 +1,159 @@
-SBILife Churn Model & SHAP API
-This project implements an XGBoost-based churn prediction model and a FastAPI service that provides SHAP (SHapley Additive exPlanations) summary statistics to explain the model’s predictions. The API is designed to integrate with a React dashboard for visualizing model interpretability.
-Table of Contents
+# SBILife Churn Model & SHAP API
 
-Overview
-Prerequisites
-Project Structure
-Setup Instructions
-Deploying on GCP Using Vertex AI
-Testing the Deployment
-Additional Notes
+This project implements an **XGBoost-based churn prediction model** along with a **FastAPI service** to expose **SHAP (SHapley Additive exPlanations)** summary statistics for model interpretability. The API is designed to integrate with a **React dashboard** for visualizing key factors behind customer churn.
 
-Overview
-The SBILife Churn Model predicts customer churn using an XGBoost classifier trained on historical data. The accompanying FastAPI service exposes endpoints to retrieve SHAP summary statistics, enabling interpretability of the model’s predictions. This setup is ideal for stakeholders who need insights into the factors driving churn predictions, with the API designed to integrate seamlessly with a React-based dashboard for visualization.
-Prerequisites
-Ensure you have the following installed before proceeding:
+---
 
-Python: Version 3.8 or later
-pip: Preferably upgraded to the latest version (pip install --upgrade pip)
-Virtual Environment Tool: venv (built into Python) or alternatives like virtualenv
-Microsoft Visual C++ Build Tools: Required for compiling certain packages (Windows users only)
-Google Cloud SDK: For deployment on GCP (install from Google Cloud SDK Docs)
-Docker: For containerization during deployment
+## 📑 Table of Contents
 
-Project Structure
-The project is organized as follows:
+* [Overview](#overview)
+* [Prerequisites](#prerequisites)
+* [Project Structure](#project-structure)
+* [Setup Instructions](#setup-instructions)
+* [Running the API](#running-the-api)
+* [Testing the Endpoint](#testing-the-endpoint)
+* [Integration with React](#integration-with-react)
+
+
+---
+
+## 📌 Overview
+
+* **Model**: XGBoost classifier trained on SBILife customer data to predict churn.
+* **Explainability**: SHAP values provide transparency behind predictions.
+* **API**: FastAPI endpoints deliver predictions and SHAP summaries.
+* **Visualization**: API integrates easily with a React dashboard for analytics.
+
+---
+
+## 🧰 Prerequisites
+
+Make sure the following are installed:
+
+* Python ≥ 3.8
+* `pip` (latest recommended)
+* `venv` or `virtualenv`
+* [Microsoft C++ Build Tools (Windows)](https://visualstudio.microsoft.com/visual-cpp-build-tools/)
+* [Google Cloud SDK](https://cloud.google.com/sdk/docs/install)
+* [Docker](https://www.docker.com/)
+
+---
+
+## 🗂 Project Structure
+
+```
 sbilife_churnmodel/
 ├── api/
-│   ├── __pycache__/              # Auto-generated Python bytecode
-│   ├── batch_prediction.py       # Script for batch predictions
-│   ├── Dockerfile                # Dockerfile for containerizing the API
-│   ├── main.py                   # Main FastAPI application for predictions
-│   ├── requirements.txt          # API-specific dependencies
-│   ├── shap_api.py               # FastAPI service for SHAP summary statistics
+│   ├── batch_prediction.py
+│   ├── main.py
+│   ├── shap_api.py
+│   ├── Dockerfile
+│   ├── requirements.txt
 ├── data/
-│   ├── test.csv                  # Test dataset for predictions and SHAP calculations
-│   ├── train.csv                 # Training dataset for model building
+│   ├── train.csv
+│   ├── test.csv
 ├── model/
-│   ├── sbilife_churn_model.pkl   # Pre-trained XGBoost model (saved with joblib)
-│   ├── shap_values.pkl           # SHAP values for model interpretability
+│   ├── sbilife_churn_model.pkl
+│   ├── shap_values.pkl
 ├── notebook/
-│   ├── sbilife_model_train.ipynb # Jupyter Notebook for training and SHAP analysis
-│   ├── test.py                   # Script for testing the model or predictions
-├── venv/                         # Virtual environment folder (ignored by .gitignore)
-├── .gitignore                    # Git ignore file for excluding venv, etc.
-├── batch_prediction.csv          # CSV file for batch prediction inputs
-├── README.md                     # Project documentation (this file)
-└── requirements.txt              # Root-level dependencies for the project
+│   ├── sbilife_model_train.ipynb
+│   ├── test.py
+├── batch_prediction.csv
+├── README.md
+├── .gitignore
+├── requirements.txt
+├── venv/ (ignored)
+```
 
-Setup Instructions
-Follow these steps to set up and run the project locally.
-1. Clone the Repository
-Clone the project to your local machine and navigate to the project directory:
+---
+
+## ⚙️ Setup Instructions
+
+### 1. Clone the Repository
+
+```bash
 git clone <repository_url>
 cd sbilife_churnmodel
+```
 
-2. Create and Activate a Virtual Environment
-Set up a virtual environment to manage dependencies:
+### 2. Set Up Virtual Environment
 
-On Windows:python -m venv venv
+```bash
+# Windows
+python -m venv venv
 venv\Scripts\activate
 
-
-On Mac/Linux:python3 -m venv venv
+# Mac/Linux
+python3 -m venv venv
 source venv/bin/activate
+```
 
+### 3. Install Dependencies
 
-
-3. Install Dependencies
-Install the required packages using the root-level requirements.txt:
+```bash
 pip install -r requirements.txt
+```
 
-The requirements.txt should include:
-fastapi
-uvicorn
-pandas
-joblib
-xgboost
-shap
-numpy
-matplotlib==3.7.1
+### 4. Train or Verify the Model
 
-4. Train or Verify the Model
-Open notebook/sbilife_model_train.ipynb in Jupyter Notebook or VS Code to train the model or verify the existing one:
+* Open `notebook/sbilife_model_train.ipynb`
+* Ensure the model is saved as: `model/sbilife_churn_model.pkl`
+* SHAP values should be generated and saved as: `model/shap_values.pkl`
 
-Loads data from data/train.csv
-Trains an XGBoost classifier
-Evaluates model performance
-Saves the model to model/sbilife_churn_model.pkl
-Computes SHAP summary plots for interpretability
+---
 
-Run the notebook to ensure the model file (sbilife_churn_model.pkl) exists in the model/ folder.
-5. Configure the FastAPI Service
-The FastAPI service is defined in api/shap_api.py. Verify the following:
+## 🚀 Running the API
 
-MODEL_PATH points to ../model/sbilife_churn_model.pkl
-TEST_FILE points to ../data/test.csv
-Expected columns match the features in your dataset
-
-6. Run the FastAPI Server
-Start the FastAPI server on port 8888 from the project root:
+```bash
 python api/shap_api.py
+```
 
-This runs Uvicorn with the following configuration:
-uvicorn.run(app, host="0.0.0.0", port=8888)
+* Runs on `http://localhost:8888`
+* Uvicorn is used under the hood
 
-The API will be accessible at http://localhost:8888.
-7. Test the API Endpoint
-Test the /shap_summary endpoint by navigating to:
+---
+
+## ✅ Testing the Endpoint
+
+Navigate to:
+
+```bash
 http://localhost:8888/shap_summary
+```
 
-Expected response (JSON):
+Expected JSON response:
 
-expected_value: The base value for SHAP predictions
-shap_summary: Mean absolute SHAP values per feature
-Sample of the test data
+```json
+{
+  "expected_value": 0.2843,
+  "shap_summary": {
+    "Age": 0.213,
+    "Vintage": 0.192,
+    ...
+  },
+  "sample_data": [...]
+}
+```
 
-8. Integrate with a React Dashboard
-Fetch the SHAP summary data from the /shap_summary endpoint in your React dashboard using fetch or axios. Render the data as a chart (e.g., bar chart) for user-friendly visualization. Refer to your React component documentation for implementation details.
-Deploying on GCP Using Vertex AI
-This section guides you through containerizing the FastAPI service and deploying it on Google Cloud Platform (GCP) using Vertex AI.
-1. Create a Dockerfile
-The existing Dockerfile in the api/ directory should look like this:
-FROM python:3.9-slim
+---
 
-# Environment variables to prevent Python from writing pyc files and buffering stdout/stderr
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+## ⚛️ Integration with React
 
-# Set working directory
-WORKDIR /app
+In your React app, use `fetch` or `axios` to hit:
 
-# Copy and install requirements
-COPY requirements.txt .
-RUN pip install --upgrade pip && pip install -r requirements.txt
+```js
+fetch('http://localhost:8888/shap_summary')
+```
 
-# Copy project files, including model and data
-COPY . .
-COPY ../model/ ./model/
-COPY ../data/ ./data/
+* Use the returned SHAP data to render visualizations (e.g., bar charts).
 
-# Expose port 8888 for the FastAPI app
-EXPOSE 8888
-
-# Run the app using uvicorn
-CMD ["uvicorn", "api.shap_api:app", "--host", "0.0.0.0", "--port", "8888"]
-
-Ensure the requirements.txt in the api/ directory matches the root-level dependencies.
-2. Build and Push the Container Image
-Set up the Google Cloud SDK and authenticate:
-gcloud auth login
+---
 
 
-Configure your project and region:
-gcloud config set project YOUR_PROJECT_ID
-gcloud config set compute/region YOUR_REGION
 
+## 🧪 Sample PowerShell Call (Multiple Inputs)
 
-Navigate to the api/ directory:
-cd api
-
-
-Build the container image using Cloud Build:
-gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/sbilife-churn-api .
-
-This builds the Docker image and pushes it to Google Container Registry (GCR).
-
-
-3. Deploy on Vertex AI
-Vertex AI enables deployment of containerized prediction services.
-
-Upload the Model to Vertex AI:
-gcloud ai models upload \
-  --region=YOUR_REGION \
-  --display-name=sbilife-churn-api \
-  --container-image-uri=gcr.io/YOUR_PROJECT_ID/sbilife-churn-api
-
-Note the MODEL_ID from the output.
-
-Create an Endpoint:
-gcloud ai endpoints create \
-  --region=YOUR_REGION \
-  --display-name=sbilife-endpoint
-
-Save the ENDPOINT_ID from the response.
-
-Deploy the Model to the Endpoint:
-gcloud ai endpoints deploy-model ENDPOINT_ID \
-  --region=YOUR_REGION \
-  --model=MODEL_ID \
-  --display-name=sbilife-deployment \
-  --machine-type=n1-standard-2 \
-  --traffic-split=0=100
-
-This deploys your FastAPI service to Vertex AI, making it accessible via an endpoint.
-
-
-Testing the Deployment
-Test the deployed endpoint using the Vertex AI Console or a REST API call. Example using curl:
-curl -X GET "https://YOUR_REGION-aiplatform.googleapis.com/v1/projects/YOUR_PROJECT_ID/locations/YOUR_REGION/endpoints/ENDPOINT_ID:predict" \
-  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
-  -H "Content-Type: application/json" \
-  -d '{}'
-
-Adjust the request format based on your endpoint’s requirements. The /shap_summary endpoint should return the expected JSON response.
-Additional Notes
-
-Performance: Adjust the sample size in shap_api.py if you encounter performance issues with large datasets.
-Model Updates: If you modify the training process in sbilife_model_train.ipynb, re-run the notebook to update sbilife_churn_model.pkl and redeploy the API.
-Dependencies: Ensure Microsoft Visual C++ Build Tools are installed on Windows if SHAP or other packages require compilation.
-Security: For production, secure your Vertex AI endpoint with proper authentication and access controls.
-Costs: Monitor GCP usage in the Console to avoid unexpected charges (Vertex AI and Cloud Build have free tiers, but costs can accrue).
-
-For further assistance, reach out to the project maintainers. Happy coding!
-
-
-commands to multiple inputs in powershell
-
+```powershell
 Invoke-RestMethod `
   -Uri "http://localhost:8888/update_data" `
   -Method Post `
@@ -224,6 +162,24 @@ Invoke-RestMethod `
 6,Male,30,1,28.0,0,1-2 Year,No,35000.0,26.0,100,1
 7,Female,45,1,15.0,1,> 2 Years,Yes,90000.0,50.0,200,1
 8,Female,55,1,99.0,1,> 2 Years,Yes,150000.0,77.0,300,1
-'@#   s b i l i f e _ c h u r n m o d e l  
- #   s b i l i f e _ c h u r n m o d e l  
- 
+'@#
+```
+
+---
+
+## 📌 Notes
+
+* 🔁 **Performance**: Adjust sampling in `shap_api.py` for larger datasets.
+* 🛡 **Security**: Secure the GCP endpoint with IAM roles.
+* 💸 **Cost Monitoring**: Keep track of GCP usage to avoid unexpected billing.
+* 🔄 **Model Updates**: Re-run notebook and redeploy if retraining the model.
+
+---
+
+## 👨‍💻 Maintainers
+
+For questions or support, feel free to open an issue or reach out via GitHub Discussions.
+
+---
+
+Let me know if you'd like a `README.md` file generated directly or help creating badges, demo GIFs, or deploy buttons.

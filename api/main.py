@@ -7,7 +7,7 @@ import os
 app = FastAPI(title="SBI Life - Churn Prediction API")
 
 # Absolute path to the model (adjust if needed)
-MODEL_PATH = r"C:\Users\Anurag mishra\sbilife_churnmodel\model\sbilife_churn_model.pkl"
+MODEL_PATH = "model/sbilife_churn_model.pkl"
 
 # Load model
 try:

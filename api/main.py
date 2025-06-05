@@ -57,3 +57,8 @@ def predict_churn(data: CustomerData):
     except Exception as e:
         print("Error during prediction:", e)
         return {"error": str(e)}
+
+@app.get("/")
+def read_root():
+    return {"message": "Welcome to the SBILife Churn Prediction API"}
+

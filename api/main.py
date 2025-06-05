@@ -1,7 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List
 import pandas as pd
 import joblib
 import shap
@@ -9,7 +8,7 @@ import numpy as np
 import os
 import csv
 from io import StringIO
-import pickle  # added for loading shap_values.pkl
+import pickle  # for loading shap_values.pkl
 
 app = FastAPI(title="SBI Life - Churn Prediction & SHAP API")
 
@@ -24,7 +23,7 @@ app.add_middleware(
 
 # Paths
 MODEL_PATH = "model/sbilife_churn_model.pkl"
-SHAP_VALUES_PATH = "model/shap_values.pkl"  # NEW: path for separate SHAP values
+SHAP_VALUES_PATH = "model/shap_values.pkl"  # path for separate SHAP values
 TRAIN_CSV = "data/train.csv"
 
 # Load model
@@ -35,7 +34,7 @@ try:
 except Exception as e:
     raise RuntimeError(f"Could not load model: {e}")
 
-# Load shap values separately
+# Load shap values/explainer separately
 try:
     print(f"Loading SHAP values/explainer from {SHAP_VALUES_PATH}")
     with open(SHAP_VALUES_PATH, "rb") as f:
@@ -94,14 +93,12 @@ def shap_summary():
         raise HTTPException(status_code=500, detail="SHAP values not loaded")
 
     try:
-        # Try to handle different possible formats of shap_values_data
+        # Handle different possible shap_values_data formats
 
-        # If shap_values_data is a dict containing 'values' and 'feature_names'
         if isinstance(shap_values_data, dict):
             shap_vals = shap_values_data.get("values", [])
             feature_names = shap_values_data.get("feature_names", [])
         else:
-            # Try to handle as shap.Explanation or numpy array
             shap_vals = getattr(shap_values_data, "values", None)
             feature_names = getattr(shap_values_data, "feature_names", None)
             if shap_vals is not None:

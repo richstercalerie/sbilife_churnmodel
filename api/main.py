@@ -70,12 +70,11 @@ def predict_churn(data: CustomerData):
     except Exception as e:
         return {"error": str(e)}
 
-# === SHAP SUMMARY ENDPOINT (Updated only this) ===
+# === SHAP SUMMARY ENDPOINT (FIXED) ===
 
 @app.get("/shap_summary")
 def shap_summary():
     try:
-        # Load training data
         df = pd.read_csv(TRAIN_CSV)
         features = [
             'Age', 'Gender', 'Region_Code', 'Previously_Insured',
@@ -88,21 +87,17 @@ def shap_summary():
         if len(df) > 1000:
             df = df.sample(n=1000, random_state=42)
 
-        # Compute SHAP values
         explainer = shap.TreeExplainer(model)
-        shap_vals = explainer.shap_values(df)
+        shap_vals = explainer.shap_values(df)  # Already shape (n, 8)
 
-        # Ensure 2D shape
-        shap_vals_array = np.array(shap_vals)
-        if shap_vals_array.ndim == 1:
-            shap_vals_array = shap_vals_array.reshape(1, -1)
-
-        avg_abs_shap = np.mean(np.abs(shap_vals_array), axis=0)
+        # Skip extra reshaping or index check
+        avg_abs_shap = np.mean(np.abs(shap_vals), axis=0)
         percent_shap = (avg_abs_shap / np.sum(avg_abs_shap)) * 100
 
         return {
             "shap_summary": dict(zip(features, percent_shap.tolist()))
         }
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error computing SHAP summary: {e}")
 

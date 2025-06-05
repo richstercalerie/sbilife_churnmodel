@@ -70,7 +70,7 @@ def predict_churn(data: CustomerData):
     except Exception as e:
         return {"error": str(e)}
 
-# === SHAP SUMMARY ENDPOINT ===
+# === SHAP SUMMARY ENDPOINT (Updated only this) ===
 
 @app.get("/shap_summary")
 def shap_summary():
@@ -85,14 +85,19 @@ def shap_summary():
         df = df.apply(pd.to_numeric, errors='coerce')
         df.dropna(inplace=True)
 
-        # Sample if needed
         if len(df) > 1000:
             df = df.sample(n=1000, random_state=42)
 
         # Compute SHAP values
         explainer = shap.TreeExplainer(model)
         shap_vals = explainer.shap_values(df)
-        avg_abs_shap = np.mean(np.abs(shap_vals), axis=0)
+
+        # Ensure 2D shape
+        shap_vals_array = np.array(shap_vals)
+        if shap_vals_array.ndim == 1:
+            shap_vals_array = shap_vals_array.reshape(1, -1)
+
+        avg_abs_shap = np.mean(np.abs(shap_vals_array), axis=0)
         percent_shap = (avg_abs_shap / np.sum(avg_abs_shap)) * 100
 
         return {

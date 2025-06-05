@@ -88,14 +88,24 @@ def shap_summary():
             df = df.sample(n=1000, random_state=42)
 
         explainer = shap.TreeExplainer(model)
-        shap_vals = explainer.shap_values(df)[1]  # Already shape (n, 8)
+        shap_vals_full = explainer.shap_values(df)
 
-        # Skip extra reshaping or index check
+        if isinstance(shap_vals_full, list):
+            shap_vals = shap_vals_full[1]
+        else:
+            shap_vals = shap_vals_full
+
         avg_abs_shap = np.mean(np.abs(shap_vals), axis=0)
         percent_shap = (avg_abs_shap / np.sum(avg_abs_shap)) * 100
 
+        expected_value = explainer.expected_value
+        # For binary classifier, expected_value can be list, pick index 1
+        if isinstance(expected_value, (list, np.ndarray)):
+            expected_value = expected_value[1]
+
         return {
-            "shap_summary": dict(zip(features, percent_shap.tolist()))
+            "expected_value": float(expected_value),
+            "shap_summary": {k: float(v) for k, v in zip(features, percent_shap.tolist())}
         }
 
     except Exception as e:

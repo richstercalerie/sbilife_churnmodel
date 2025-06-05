@@ -8,11 +8,9 @@ import numpy as np
 import os
 import csv
 from io import StringIO
-import pickle  # for loading shap_values.pkl
 
 app = FastAPI(title="SBI Life - Churn Prediction & SHAP API")
 
-# CORS (optional, for frontend integration)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,26 +21,13 @@ app.add_middleware(
 
 # Paths
 MODEL_PATH = "model/sbilife_churn_model.pkl"
-SHAP_VALUES_PATH = "model/shap_values.pkl"  # path for separate SHAP values
 TRAIN_CSV = "data/train.csv"
 
 # Load model
 try:
-    print(f"Loading model from {MODEL_PATH}")
     model = joblib.load(MODEL_PATH)
-    print("Model loaded successfully.")
 except Exception as e:
     raise RuntimeError(f"Could not load model: {e}")
-
-# Load shap values/explainer separately
-try:
-    print(f"Loading SHAP values/explainer from {SHAP_VALUES_PATH}")
-    with open(SHAP_VALUES_PATH, "rb") as f:
-        shap_values_data = pickle.load(f)
-    print("SHAP values/explainer loaded successfully.")
-except Exception as e:
-    shap_values_data = None
-    print(f"Warning: Could not load SHAP values: {e}")
 
 # === SCHEMAS ===
 
@@ -89,35 +74,32 @@ def predict_churn(data: CustomerData):
 
 @app.get("/shap_summary")
 def shap_summary():
-    if shap_values_data is None:
-        raise HTTPException(status_code=500, detail="SHAP values not loaded")
-
     try:
-        # Handle different possible shap_values_data formats
+        # Load training data
+        df = pd.read_csv(TRAIN_CSV)
+        features = [
+            'Age', 'Gender', 'Region_Code', 'Previously_Insured',
+            'Vehicle_Damage', 'Annual_Premium', 'Policy_Sales_Channel', 'Vintage'
+        ]
+        df = df[features]
+        df = df.apply(pd.to_numeric, errors='coerce')
+        df.dropna(inplace=True)
 
-        if isinstance(shap_values_data, dict):
-            shap_vals = shap_values_data.get("values", [])
-            feature_names = shap_values_data.get("feature_names", [])
-        else:
-            shap_vals = getattr(shap_values_data, "values", None)
-            feature_names = getattr(shap_values_data, "feature_names", None)
-            if shap_vals is not None:
-                shap_vals = shap_vals.tolist()
-            if feature_names is None:
-                feature_names = [
-                    'Age', 'Gender', 'Region_Code', 'Previously_Insured',
-                    'Vehicle_Damage', 'Annual_Premium', 'Policy_Sales_Channel', 'Vintage'
-                ]
+        # Sample if needed
+        if len(df) > 1000:
+            df = df.sample(n=1000, random_state=42)
 
-        shap_vals_array = np.array(shap_vals)
-        avg_abs_shap = np.mean(np.abs(shap_vals_array), axis=0)
+        # Compute SHAP values
+        explainer = shap.TreeExplainer(model)
+        shap_vals = explainer.shap_values(df)
+        avg_abs_shap = np.mean(np.abs(shap_vals), axis=0)
         percent_shap = (avg_abs_shap / np.sum(avg_abs_shap)) * 100
 
         return {
-            "shap_summary": dict(zip(feature_names, percent_shap.tolist()))
+            "shap_summary": dict(zip(features, percent_shap.tolist()))
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error processing SHAP summary: {e}")
+        raise HTTPException(status_code=500, detail=f"Error computing SHAP summary: {e}")
 
 # === CSV UPLOAD (append new data) ===
 

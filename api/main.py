@@ -88,7 +88,7 @@ def shap_summary():
             df = df.sample(n=1000, random_state=42)
 
         explainer = shap.TreeExplainer(model)
-        shap_vals = explainer.shap_values(df)  # Already shape (n, 8)
+        shap_vals = explainer.shap_values(df)[1]  # Already shape (n, 8)
 
         # Skip extra reshaping or index check
         avg_abs_shap = np.mean(np.abs(shap_vals), axis=0)

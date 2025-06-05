@@ -82,7 +82,7 @@ def predict_churn(data: CustomerData):
     try:
         df = pd.DataFrame([data.dict()])
         prob = model.predict_proba(df)[0][1]
-        prediction = int(prob > 0.5)  # Standard threshold
+        prediction = int(prob > 0.5)
         logger.info(f"Prediction made: probability={prob*100:.2f}%, prediction={'Churn Likely' if prediction else 'Retention Likely'}")
         return {
             "churn_probability": round(prob * 100, 2),
@@ -118,7 +118,7 @@ def load_train_data():
     df = df.dropna()
     if df.empty:
         logger.error("DataFrame is empty after preprocessing")
-        raise HTTPException(status_code=400, detail="No valid data after preprocessing")
+        raise HTTPException(status_code=400, detail="No valid data after preprocessing. Ensure train.csv contains valid values")
     logger.info(f"Loaded {len(df)} rows from training data")
     return df
 
@@ -139,12 +139,11 @@ def compute_shap_summary():
             continue
         shap_values_chunk = explainer.shap_values(chunk)
         logger.info(f"SHAP values shape for chunk {i//chunk_size + 1}: {np.shape(shap_values_chunk)}")
-        # Handle SHAP values
         if isinstance(shap_values_chunk, list):
-            shap_values_chunk = shap_values_chunk[1]  # Positive class
+            shap_values_chunk = shap_values_chunk[1]
         elif isinstance(shap_values_chunk, np.ndarray):
             if shap_values_chunk.ndim == 1:
-                shap_values_chunk = shap_values_chunk.reshape(1, -1)  # Single-sample case
+                shap_values_chunk = shap_values_chunk.reshape(1, -1)
         else:
             logger.error(f"Unexpected SHAP values type: {type(shap_values_chunk)}")
             raise HTTPException(status_code=500, detail=f"Unexpected SHAP values type")
@@ -185,7 +184,6 @@ def get_shap_summary():
 @app.post("/update_data")
 async def update_data(request: Request):
     try:
-        # Get last ID
         if os.path.exists(TRAIN_CSV) and os.path.getsize(TRAIN_CSV) > 0:
             df_existing = pd.read_csv(TRAIN_CSV)
             last_id = df_existing.iloc[-1]["id"] if "id" in df_existing.columns else 0
@@ -196,12 +194,10 @@ async def update_data(request: Request):
         else:
             last_id = 0
 
-        # Determine content type
         content_type = request.headers.get("Content-Type", "").lower()
         new_rows = []
 
         if "application/json" in content_type:
-            # Handle JSON input
             data = await request.json()
             if isinstance(data, dict):
                 data = [data]
@@ -215,7 +211,6 @@ async def update_data(request: Request):
                 csv_row = [str(row[field]) for field in expected_csv_fields]
                 new_rows.append(",".join(csv_row))
         else:
-            # Handle CSV text input
             body = await request.body()
             text = body.decode("utf-8").replace('\r\n', '\n').replace('\r', '\n').strip()
             if not text:
@@ -233,7 +228,6 @@ async def update_data(request: Request):
                     fields[0] = str(last_id)
                 new_rows.append(",".join(fields))
 
-        # Append to CSV
         mode = "a" if os.path.exists(TRAIN_CSV) and os.path.getsize(TRAIN_CSV) > 0 else "w"
         newline_prefix = "\n" if mode == "a" and os.path.getsize(TRAIN_CSV) > 0 else ""
         with open(TRAIN_CSV, mode, encoding="utf-8") as f:
@@ -279,4 +273,5 @@ def root():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="localhost", port=8888)
+    port = int(os.getenv("PORT", 8888))
+    uvicorn.run(app, host="0.0.0.0", port=port)

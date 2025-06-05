@@ -1,24 +1,43 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import List
 import pandas as pd
 import joblib
+import shap
+import numpy as np
 import os
+import csv
+from io import StringIO
 
-app = FastAPI(title="SBI Life - Churn Prediction API")
+app = FastAPI(title="SBI Life - Churn Prediction & SHAP API")
 
-# Absolute path to the model (adjust if needed)
+# CORS (optional, for frontend integration)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Paths
 MODEL_PATH = "model/sbilife_churn_model.pkl"
+TRAIN_CSV = "data/train.csv"
 
 # Load model
 try:
-    print("Loading model from:", MODEL_PATH)
+    print(f"Loading model from {MODEL_PATH}")
     model = joblib.load(MODEL_PATH)
     print("Model loaded successfully.")
 except Exception as e:
-    print("Failed to load model:", e)
     raise RuntimeError(f"Could not load model: {e}")
 
-# Define expected schema
+# SHAP Explainer
+explainer = shap.TreeExplainer(model)
+
+# === SCHEMAS ===
+
 class CustomerData(BaseModel):
     Age: int
     Gender: int
@@ -29,36 +48,134 @@ class CustomerData(BaseModel):
     Policy_Sales_Channel: int
     Vintage: int
 
+class DataRow(BaseModel):
+    id: str = ""
+    Gender: str
+    Age: float
+    Driving_License: int
+    Region_Code: float
+    Previously_Insured: int
+    Vehicle_Age: str
+    Vehicle_Damage: str
+    Annual_Premium: float
+    Policy_Sales_Channel: float
+    Vintage: int
+    Response: int
+
+# === PREDICTION ENDPOINT ===
+
 @app.post("/predict_churn")
 def predict_churn(data: CustomerData):
     try:
-        # Convert input to DataFrame
-        input_dict = data.dict()
-        print("Input received:", input_dict)
-        df = pd.DataFrame([input_dict])
-        # Ensure correct column order
-        df = df[['Age', 'Gender', 'Region_Code', 'Previously_Insured',
-                 'Vehicle_Damage', 'Annual_Premium', 'Policy_Sales_Channel', 'Vintage']]
-        print("Prepared DataFrame:", df)
-
-        # Prediction
+        df = pd.DataFrame([data.dict()])
         prob = model.predict_proba(df)[0][1]
-        prob = float(prob)
-        print("Predicted probability:", prob)
-
-        # Use optimized threshold instead of 0.5 (set manually based on your evaluation)
-        THRESHOLD = 0.3  
-        prediction = int(prob > THRESHOLD)
+        prediction = int(prob > 0.3)
         return {
             "churn_probability": round(prob * 100, 2),
             "prediction": "Churn Likely" if prediction else "Retention Likely"
         }
-
     except Exception as e:
-        print("Error during prediction:", e)
         return {"error": str(e)}
 
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to the SBILife Churn Prediction API"}
+# === SHAP SUMMARY ENDPOINT ===
 
+@app.get("/shap_summary")
+def shap_summary():
+    expected_columns = [
+        'Age', 'Gender', 'Region_Code', 'Previously_Insured',
+        'Vehicle_Damage', 'Annual_Premium', 'Policy_Sales_Channel', 'Vintage'
+    ]
+    try:
+        df = pd.read_csv(TRAIN_CSV)
+        df = df[expected_columns]
+        df = df.apply(pd.to_numeric, errors='coerce')
+        df = df.dropna()
+        df = df.sample(min(1000, len(df)))
+
+        aggregated = np.zeros(len(expected_columns))
+        chunks = [df[i:i+100] for i in range(0, len(df), 100)]
+        for chunk in chunks:
+            shap_vals = explainer.shap_values(chunk)
+            aggregated += np.mean(np.abs(shap_vals), axis=0)
+
+        avg_shap = aggregated / len(chunks)
+        percent_shap = (avg_shap / np.sum(avg_shap)) * 100
+
+        return {
+            "expected_value": round(float(explainer.expected_value) * 100, 2),
+            "shap_summary": dict(zip(expected_columns, percent_shap.tolist()))
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error computing SHAP: {e}")
+
+# === CSV UPLOAD (append new data) ===
+
+@app.post("/update_data")
+async def update_data(request: Request):
+    expected_fields = [
+        'id', 'Gender', 'Age', 'Driving_License', 'Region_Code', 'Previously_Insured',
+        'Vehicle_Age', 'Vehicle_Damage', 'Annual_Premium', 'Policy_Sales_Channel', 'Vintage', 'Response'
+    ]
+    try:
+        if os.path.exists(TRAIN_CSV):
+            df = pd.read_csv(TRAIN_CSV)
+            last_id = int(df['id'].iloc[-1]) if 'id' in df.columns else 0
+        else:
+            last_id = 0
+
+        content_type = request.headers.get("Content-Type", "").lower()
+        new_rows = []
+
+        if "application/json" in content_type:
+            data = await request.json()
+            if isinstance(data, dict): data = [data]
+            for entry in data:
+                row = DataRow(**entry).dict()
+                if row["id"] == "":
+                    last_id += 1
+                    row["id"] = str(last_id)
+                new_rows.append(",".join(str(row[f]) for f in expected_fields))
+        else:
+            text = (await request.body()).decode()
+            reader = csv.reader(StringIO(text))
+            for fields in reader:
+                if len(fields) != len(expected_fields):
+                    raise HTTPException(status_code=400, detail="Incorrect number of fields.")
+                if fields[0] == "":
+                    last_id += 1
+                    fields[0] = str(last_id)
+                new_rows.append(",".join(fields))
+
+        mode = "a" if os.path.exists(TRAIN_CSV) else "w"
+        with open(TRAIN_CSV, mode, encoding="utf-8") as f:
+            if mode == "w":
+                f.write(",".join(expected_fields) + "\n")
+            for line in new_rows:
+                f.write("\n" + line)
+        return {"detail": f"{len(new_rows)} rows added."}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating CSV: {e}")
+
+# === CSV UPDATE (update row by ID) ===
+
+@app.post("/update_data_by_id")
+async def update_by_id(data: DataRow):
+    try:
+        if not data.id:
+            raise HTTPException(status_code=400, detail="Missing ID.")
+        df = pd.read_csv(TRAIN_CSV)
+        if data.id not in df["id"].astype(str).values:
+            raise HTTPException(status_code=404, detail=f"No record with id {data.id}")
+        for k, v in data.dict().items():
+            if k != "id":
+                df.loc[df["id"].astype(str) == data.id, k] = v
+        df.to_csv(TRAIN_CSV, index=False)
+        return df[df["id"].astype(str) == data.id].to_dict(orient="records")[0]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Update failed: {e}")
+
+# === ROOT ===
+
+@app.get("/")
+def root():
+    return {"message": "Welcome to the SBILife Churn Prediction & SHAP API"}
